@@ -1,7 +1,9 @@
 import cherrypy
-
 import requests, zipfile, io
+import csv
+import redis
 
+red = redis.StrictRedis(host='localhost', port=6379, db=0,decode_responses=True)
 
 class StringGenerator(object):
     @cherrypy.expose
@@ -20,9 +22,18 @@ class StringGenerator(object):
         z.extractall()
 
         # Save CSV into the Redis DB
+        with open('EQ010618.csv', 'r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
 
-        return "";
+            for row in csv_reader:
+                red.hset('code:' + row['SC_CODE'], 'code', row['SC_CODE'])
+                red.hset('code:' + row['SC_CODE'], 'name', row['SC_NAME'].strip())
+                red.hset('code:' + row['SC_CODE'], 'open', row['OPEN'])
+                red.hset('code:' + row['SC_CODE'], 'high', row['HIGH'])
+                red.hset('code:' + row['SC_CODE'], 'low', row['LOW'])
+                red.hset('code:' + row['SC_CODE'], 'close', row['CLOSE'])
 
+        print(red.hgetall('code:500002'))
 
 if __name__ == '__main__':
     cherrypy.config.update({'server.socket_host': '127.0.0.1','server.socket_port': 8080})

@@ -134,6 +134,7 @@ class BSE(object):
             <body>
             <div id=header align=center>
             <img width="100" height="34.5" src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Bombay_Stock_Exchange_logo.svg/2000px-Bombay_Stock_Exchange_logo.svg.png">
+            """ + name_of_stock + '\'s Performance' + """
             </div>
             <table align="center" class="mdl-data-table mdl-js-data-table mdl-shadow--2dp">
                 <thead>
@@ -191,7 +192,6 @@ class BSE(object):
         while i < 10:
 
             date_of_csv = datetime.datetime.today() - datetime.timedelta(days=i)
-            print(date_of_csv)
             date_str = str('%02d' % date_of_csv.day) + str('%02d' % date_of_csv.month) + str(date_of_csv.year - 2000)
             csv_path = 'EQ' + date_str + '.CSV'
 

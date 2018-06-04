@@ -12,7 +12,6 @@ red = redis.StrictRedis(host='localhost', port=6379,
 
 
 class BSE(object):
-
     showing_data_for = ''
 
     @cherrypy.expose
@@ -24,7 +23,7 @@ class BSE(object):
 
         return self.get_html(self.get_top_ten_stocks())
 
-    def get_html(self,top_ten):
+    def get_html(self, top_ten):
         html_mid = ''
 
         for stock in top_ten:
@@ -35,12 +34,16 @@ class BSE(object):
             open_html = '<td>' + stock_info['open'] + '</td>'
             high_html = '<td>' + stock_info['high'] + '</td>'
             low_html = '<td>' + stock_info['low'] + '</td>'
-            close_html = '<td>' + stock_info['close'] + '</td>'
+            if stock_info['close'] > stock_info['open']:
+                close_html = '<td class="green_text">' + stock_info['close'] + '</td>'
+            elif stock_info['close'] < stock_info['open']:
+                close_html = '<td class="red_text">' + stock_info['close'] + '</td>'
+            else:
+                close_html = '<td class="blue_text">' + stock_info['close'] + '</td>'
             begin_r = '<tr>'
             end_r = '</tr>'
 
-            html_mid = html_mid + begin_r + code_html + name_html + \
-                       open_html + high_html + low_html + close_html + end_r
+            html_mid = html_mid + begin_r + code_html + name_html + open_html + high_html + low_html + close_html + end_r
 
         html_front = """
                     <html>
@@ -90,8 +93,6 @@ class BSE(object):
                     """
         return html_front + html_mid + html_rear
 
-
-
     @cherrypy.expose
     def search(self, name_of_stock):
 
@@ -100,7 +101,8 @@ class BSE(object):
         stock_code = red.zscore('name', name_of_stock)
 
         if not stock_code:
-            return 'Please enter a valid stock name and try again.'
+            # return 'Please enter a valid stock name and try again.'
+            return open('error.html', 'r').read()
 
         stock_hash_key = 'code:' + str(int(stock_code))
 
@@ -112,7 +114,12 @@ class BSE(object):
         open_html = '<td>' + stock_info['open'] + '</td>'
         high_html = '<td>' + stock_info['high'] + '</td>'
         low_html = '<td>' + stock_info['low'] + '</td>'
-        close_html = '<td>' + stock_info['close'] + '</td>'
+        if stock_info['close'] > stock_info['open']:
+            close_html = '<td class="green_text">' + stock_info['close'] + '</td>'
+        elif stock_info['close'] < stock_info['open']:
+            close_html = '<td class="red_text">' + stock_info['close'] + '</td>'
+        else:
+            close_html = '<td class="blue_text">' + stock_info['close'] + '</td>'
         begin_r = '<tr>'
         end_r = '</tr>'
 
@@ -171,7 +178,7 @@ class BSE(object):
                 red.hset('code:' + row['SC_CODE'], 'low', row['LOW'])
                 red.hset('code:' + row['SC_CODE'], 'close', row['CLOSE'])
 
-                red.zadd('open', row['OPEN'], 'code:' + row['SC_CODE'])  # To find top 10 stocks quickly
+                red.zadd('close', row['OPEN'], 'code:' + row['SC_CODE'])  # To find top 10 stocks quickly
                 red.zadd('name', row['SC_CODE'], row['SC_NAME'].strip())  # To find by name
 
     def get_csv(self):
@@ -188,8 +195,7 @@ class BSE(object):
             date_str = str('%02d' % date_of_csv.day) + str('%02d' % date_of_csv.month) + str(date_of_csv.year - 2000)
             csv_path = 'EQ' + date_str + '.CSV'
 
-            if os.path.exists('./'+csv_path):
-                print('path exists')
+            if os.path.exists('./' + csv_path):
                 return csv_path, date_of_csv
 
             url = 'https://www.bseindia.com/download/BhavCopy/Equity/EQ' + date_str + '_CSV.ZIP'
@@ -197,7 +203,7 @@ class BSE(object):
 
             if request.status_code == 200:
 
-                #Delete old CSV files, if any
+                # Delete old CSV files, if any
 
                 cwd = os.listdir(os.getcwd())
 
@@ -214,12 +220,12 @@ class BSE(object):
                 i += 1
 
     def get_top_ten_stocks(self):
-        return red.zrevrange('open', 0, 9)
+        return red.zrevrange('close', 0, 9)
 
 
 if __name__ == '__main__':
     cherrypy.config.update(
-        {'server.socket_host': '0.0.0.0', 'server.socket_port': 8080})
+        {'server.socket_host': '0.0.0.0', 'server.socket_port': 80})
     conf = {
         '/': {
             'tools.sessions.on': True,

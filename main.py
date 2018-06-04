@@ -1,10 +1,13 @@
 import cherrypy
-import requests, zipfile, io
+import requests
+import zipfile
+import io
 import csv
 import redis
 import os
 
-red = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+red = redis.StrictRedis(host='localhost', port=6379,
+                        db=0, decode_responses=True)
 
 
 class BSE(object):
@@ -16,7 +19,8 @@ class BSE(object):
         html_mid = ''
         for stock in top_ten:
             code_html = '<td>' + red.hgetall(stock)['code'] + '</td>'
-            name_html = '<td class="mdl-data-table__cell--non-numeric">' + red.hgetall(stock)['name'] + '</td>'
+            name_html = '<td class="mdl-data-table__cell--non-numeric">' + \
+                red.hgetall(stock)['name'] + '</td>'
             open_html = '<td>' + red.hgetall(stock)['open'] + '</td>'
             high_html = '<td>' + red.hgetall(stock)['high'] + '</td>'
             low_html = '<td>' + red.hgetall(stock)['low'] + '</td>'
@@ -24,7 +28,8 @@ class BSE(object):
             begin_r = '<tr>'
             end_r = '</tr>'
 
-            html_mid = html_mid + begin_r + code_html + name_html + open_html + high_html + low_html + close_html + end_r
+            html_mid = html_mid + begin_r + code_html + name_html + \
+                open_html + high_html + low_html + close_html + end_r
 
         html_front = """
             <html>
@@ -85,7 +90,8 @@ class BSE(object):
         z.extractall()
 
         # Save CSV into the Redis DB
-        with open('EQ010618.csv', 'r') as csv_file:
+        csv_path='EQ010618.CSV'
+        with open(csv_path, 'r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
             red.flushall()
             top_ten = ''
@@ -94,7 +100,9 @@ class BSE(object):
 
             for row in csv_reader:
                 red.hset('code:' + row['SC_CODE'], 'code', row['SC_CODE'])
-                red.hset('code:' + row['SC_CODE'], 'name', row['SC_NAME'].strip())  # Because CSV returns name w/ spaces
+                # Because CSV returns name w/ spaces
+                red.hset('code:' + row['SC_CODE'],
+                         'name', row['SC_NAME'].strip())
                 red.hset('code:' + row['SC_CODE'], 'open', row['OPEN'])
                 red.hset('code:' + row['SC_CODE'], 'high', row['HIGH'])
                 red.hset('code:' + row['SC_CODE'], 'low', row['LOW'])
@@ -109,7 +117,8 @@ class BSE(object):
 
 
 if __name__ == '__main__':
-    cherrypy.config.update({'server.socket_host': '127.0.0.1', 'server.socket_port': 8080})
+    cherrypy.config.update(
+        {'server.socket_host': '0.0.0.0', 'server.socket_port': 8080})
     conf = {
         '/': {
             'tools.sessions.on': True,
@@ -121,3 +130,4 @@ if __name__ == '__main__':
         }
     }
     cherrypy.quickstart(BSE(), '/', conf)
+t

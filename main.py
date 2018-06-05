@@ -17,11 +17,79 @@ class BSE(object):
     @cherrypy.expose
     def index(self):
 
-        csv_data, date_of_csv = self.get_csv()
+        csv_path, date_of_csv = self.get_csv()
 
-        self.store_csv_in_redis(csv_data, date_of_csv)
+        if csv_path == '200':
+            return 'Unable to fetch data from BSE! Please try later.'
+
+        self.store_csv_in_redis(csv_path, date_of_csv)
 
         return self.get_html(self.get_top_ten_stocks())
+
+    def get_csv(self):
+
+        red.flushall()
+
+        # Try to find the zip for the current day, if not found
+        # go and try to find one from previous day and keep trying for previous ten days
+        i = 0
+        while i < 10:
+
+            date_of_csv = datetime.datetime.today() - datetime.timedelta(days=i)
+            date_str = str('%02d' % date_of_csv.day) + str('%02d' % date_of_csv.month) + str(date_of_csv.year - 2000)
+            csv_path = 'EQ' + date_str + '.CSV'
+
+            if os.path.exists('./' + csv_path):
+                return csv_path, date_of_csv
+
+            url = 'https://www.bseindia.com/download/BhavCopy/Equity/EQ' + date_str + '_CSV.ZIP'
+            request = requests.get(url)
+
+            if request.status_code == 200:
+
+                # Delete old CSV files, if any
+
+                cwd = os.listdir(os.getcwd())
+
+                for item in cwd:
+                    if item.endswith(".CSV"):
+                        os.remove(os.path.join(os.getcwd(), item))
+
+                # Extract Zip
+                z = zipfile.ZipFile(io.BytesIO(request.content))
+                z.extractall()
+                return csv_path, date_of_csv
+
+            else:
+                i += 1
+
+        return '200', ' '
+
+    def store_csv_in_redis(self, csv_path, date_of_csv):
+        # Save CSV into the Redis DB
+
+        with open(csv_path, 'r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            self.showing_data_for = date_of_csv
+
+            # Store the data we need from the CSV to the Redis DB
+
+            for row in csv_reader:
+                red.hset('code:' + row['SC_CODE'], 'code', row['SC_CODE'])
+                # Because CSV returns name w/ spaces
+                red.hset('code:' + row['SC_CODE'],
+                         'name', row['SC_NAME'].strip())
+                red.hset('code:' + row['SC_CODE'], 'open', row['OPEN'])
+                red.hset('code:' + row['SC_CODE'], 'high', row['HIGH'])
+                red.hset('code:' + row['SC_CODE'], 'low', row['LOW'])
+                red.hset('code:' + row['SC_CODE'], 'close', row['CLOSE'])
+
+                red.zadd('close', row['OPEN'], 'code:' + row['SC_CODE'])  # To find top 10 stocks quickly
+                red.zadd('name', row['SC_CODE'], row['SC_NAME'].strip())  # To find by name
+
+
+    def get_top_ten_stocks(self):
+        return red.zrevrange('close', 0, 9)
 
     def get_html(self, top_ten):
         html_mid = ''
@@ -159,68 +227,6 @@ class BSE(object):
             """
 
         return html_front + html_mid + html_rear
-
-    def store_csv_in_redis(self, csv_path, date_of_csv):
-        # Save CSV into the Redis DB
-
-        with open(csv_path, 'r') as csv_file:
-            csv_reader = csv.DictReader(csv_file)
-            self.showing_data_for = date_of_csv
-
-            # Store the data we need from the CSV to the Redis DB
-
-            for row in csv_reader:
-                red.hset('code:' + row['SC_CODE'], 'code', row['SC_CODE'])
-                # Because CSV returns name w/ spaces
-                red.hset('code:' + row['SC_CODE'],
-                         'name', row['SC_NAME'].strip())
-                red.hset('code:' + row['SC_CODE'], 'open', row['OPEN'])
-                red.hset('code:' + row['SC_CODE'], 'high', row['HIGH'])
-                red.hset('code:' + row['SC_CODE'], 'low', row['LOW'])
-                red.hset('code:' + row['SC_CODE'], 'close', row['CLOSE'])
-
-                red.zadd('close', row['OPEN'], 'code:' + row['SC_CODE'])  # To find top 10 stocks quickly
-                red.zadd('name', row['SC_CODE'], row['SC_NAME'].strip())  # To find by name
-
-    def get_csv(self):
-
-        red.flushall()
-
-        # Try to find the zip for the current day, if not found
-        # go and try to find one from previous day and keep trying for previous ten days
-        i = 0
-        while i < 10:
-
-            date_of_csv = datetime.datetime.today() - datetime.timedelta(days=i)
-            date_str = str('%02d' % date_of_csv.day) + str('%02d' % date_of_csv.month) + str(date_of_csv.year - 2000)
-            csv_path = 'EQ' + date_str + '.CSV'
-
-            if os.path.exists('./' + csv_path):
-                return csv_path, date_of_csv
-
-            url = 'https://www.bseindia.com/download/BhavCopy/Equity/EQ' + date_str + '_CSV.ZIP'
-            request = requests.get(url)
-
-            if request.status_code == 200:
-
-                # Delete old CSV files, if any
-
-                cwd = os.listdir(os.getcwd())
-
-                for item in cwd:
-                    if item.endswith(".CSV"):
-                        os.remove(os.path.join(os.getcwd(), item))
-
-                # Extract Zip
-                z = zipfile.ZipFile(io.BytesIO(request.content))
-                z.extractall()
-                return csv_path, date_of_csv
-
-            else:
-                i += 1
-
-    def get_top_ten_stocks(self):
-        return red.zrevrange('close', 0, 9)
 
 
 if __name__ == '__main__':
